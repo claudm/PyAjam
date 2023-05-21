@@ -23,14 +23,14 @@ __status__  = "developpement"
 __version__ = "0.2"
 __date__    = "2011/09/08"
 
-import sys, urllib2, re, logging, time
+import sys, urllib.request, urllib.error, urllib.parse, re, logging, time
 # Only on python 2.5 & superior
 from xml.etree import ElementTree
 
 # only on python 2.5 & superior
-if not hasattr(urllib2, 'quote'):
-    import urllib
-    urllib2.quote = urllib.quote
+# if not hasattr(urllib2, 'quote'):
+#     import urllib.request, urllib.parse, urllib.error
+#     urllib.parse.quote = urllib.parse.quote
 
 
 class Pyajam:
@@ -67,18 +67,18 @@ class Pyajam:
         """Query Asterisk AJAM service.
 
         """
-        qargs = '&'.join(map(lambda x: "%s=%s" % (x, urllib2.quote(args[x])), args))
+        qargs = '&'.join(["%s=%s" % (x, urllib.parse.quote(args[x])) for x in args])
         if len(qargs) > 0:
             qargs = '&' + qargs
 
         logging.debug("GET %s/%s?action=%s%s" % (self.url, mode, action, qargs))
-        req = urllib2.Request("%s/%s?action=%s%s" % (self.url, mode, action, qargs))
+        req = urllib.request.Request("%s/%s?action=%s%s" % (self.url, mode, action, qargs))
         req.add_header('Cookie', "mansession_id=\"%s\"" % self._sessionid_)
         try:
-            f = urllib2.urlopen(req)
+            f = urllib.request.urlopen(req)
             data = f.read()
             logging.debug(data)
-        except Exception, e:
+        except Exception as e:
             logging.error(e)
             if self.connexion_status == 'CONNECTED' and self.errback:
                 # We WERE connected, but not anymore, so if there is a errback, run it
@@ -98,9 +98,9 @@ class Pyajam:
 
             req.add_header('Cookie', "mansession_id=\"%s\"" % self._sessionid_)
             try:
-                f = urllib2.urlopen(req)
+                f = urllib.request.urlopen(req)
                 data = f.read()
-            except Exception, e:
+            except Exception as e:
                 if self.connexion_status == 'CONNECTED' and self.errback:
                     # We WERE connected, but not anymore, so if there is a errback, run it
                     self.errback()
@@ -123,13 +123,13 @@ class Pyajam:
         datas = []
 
         for elem in doc.iter(tag='generic'):
-            for attr, value in filter.iteritems():
-                if attr not in elem.keys() or value is not None and elem.get(attr) != value:
+            for attr, value in list(filter.items()):
+                if attr not in list(elem.keys()) or value is not None and elem.get(attr) != value:
                     continue
 
                 # We have the good shape :-)
                 attrs = {}
-                for key in elem.keys():
+                for key in list(elem.keys()):
                     attrs[key] = elem.get(key)
                 if normalizer:
                     attrs = normalizer(attrs)
@@ -172,7 +172,7 @@ class Pyajam:
         """
         (info, data) = self._query('manager', 'login',
           {'username': self.username, 'secret': self.password})
-        if not info or not ("Authentication accepted" in data or "Already authenticated" in data):
+        if not info or not "Authentication accepted" in data:
             self._sessionid_ = ''
             return False
 
@@ -181,21 +181,19 @@ class Pyajam:
         self._sessionid_ = info['set-cookie'].split(';')[0].split('=')[1][1:-1]
 
         # extraction asterisk version
-        if not info.has_key('Server') or \
-        not info['Server'].startswith('Asterisk'):
+        if 'Server' not in info or \
+        not info['Server'].startswith('Asterisk/'):
             logging.error("login:: not logging to an asterisk server")
             return False
 
-        """
         version = info['Server'].split('/')[1].split('.',2)
         self._version_ = version[0]
         if self._version_ < '10':
             self._version_ += '.' + version [1]
         #print 'version=', self._version_, info
-        if self._version_ not in ['1.4', '1.6', '1.8', '10', '11', '12', '13', '14']:
+        if self._version_ not in ['1.4', '1.6', '1.8', '10', '11']:
             logging.error("login:: Unmanaged %s asterisk version" % self._version_)
             return False
-        """
 
         return True
 
@@ -263,8 +261,8 @@ class Pyajam:
 
                 # when OK, status = 'OK (13 ms)' per example (with latency in parenthesis)
                 if row['status'][0:2] == 'OK':
-                    row[u'latency'] = row['status'][4:-4]
-                    row[u'status']  = u'OK'
+                    row['latency'] = row['status'][4:-4]
+                    row['status']  = 'OK'
 
                 return row
 
@@ -324,24 +322,24 @@ class Pyajam:
 
         if self.unify:
             def _normalize(row):
-                row[u'channeltype'] = u'IAX2'
+                row['channeltype'] = 'IAX2'
 
                 if row['dynamic'] in ('yes', 'D'):
-                    row['dynamic'] = u'yes'
+                    row['dynamic'] = 'yes'
                 else:
-                    row['dynamic'] = u'no'
+                    row['dynamic'] = 'no'
 
                 # when OK, status = 'OK (13 ms)' per example
                 if row['status'][0:2] == 'OK':
-                    row[u'latency'] = row['status'][4:-4]
-                    row[u'status']  = 'OK'
+                    row['latency'] = row['status'][4:-4]
+                    row['status']  = 'OK'
 
                 name = row['objectname'].split('/')
                 if len(name) > 1:
-                    row[u'objectname']  = name[0]
-                    row[u'username']    = name[1]
+                    row['objectname']  = name[0]
+                    row['username']    = name[1]
                 else:
-                    row[u'username']    = u''
+                    row['username']    = ''
 
                 return row
 
@@ -572,7 +570,7 @@ class Pyajam:
             data = self._unify_raw(data, regex, normalizer, unifyin)
         return data
 
-    def waitevent(self, async=False, callback=None, errback=None, recoverback=None):
+    def waitevent(self,  callback=None, errback=None, recoverback=None):
         """Manage Asterisk events.
 
          Usage:
@@ -611,16 +609,16 @@ class Pyajam:
         if recoverback:
             self.recoverback = recoverback
 
-        if async:
-            if not callback:
-                raise ValueError('callback argument is required when async is true')
-
-            from Queue import Queue
-            import thread
-            self.eventQ = Queue(0)
-            thread.start_new_thread(self._waitevent, (callback,))
-        else:
-            return self._waitevent(callback)
+        # if async:
+        #     if not callback:
+        #         raise ValueError('callback argument is required when async is true')
+        #
+        #     from queue import Queue
+        #     import _thread
+        #     self.eventQ = Queue(0)
+        #     _thread.start_new_thread(self._waitevent, (callback,))
+        # else:
+        return self._waitevent(callback)
 
     def _waitevent(self, callback):
         """Event async manager.
@@ -637,8 +635,8 @@ class Pyajam:
             if callback:
                 try:
                     callback(data)
-                except Exception, e:
-                    print e
+                except Exception as e:
+                    print(e)
             else:
                 self._waitevt__run = False
                 return data
@@ -657,10 +655,10 @@ if __name__ == '__main__':
 
     ajam = Pyajam()
     if not ajam.login():
-        print "Invalid login"
+        print("Invalid login")
         sys.exit(1)
 
-    print 'asterisk version=', ajam.version()
+    print(('asterisk version=', ajam.version()))
     # Get SIP peers list
     pp.pprint(ajam.sippeers())
     # Get IAX2 peers list
@@ -687,7 +685,7 @@ if __name__ == '__main__':
 
     # Event handler
     def ajam_event_listener(data):
-        print "event data >>>"
+        print("event data >>>")
         pp.pprint(data)
 
     while True:
